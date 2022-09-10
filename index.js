@@ -1,7 +1,7 @@
 require("dotenv").config();
 const fs = require("fs/promises");
 const { Client } = require("@notionhq/client");
-const maxRequestsPerSecond = 2.5;
+const maxRequestsPerSecond = 2;
 const timeToWaitPerRequest = (1 / maxRequestsPerSecond) * 1000;
 
 // Initializing a client
@@ -69,9 +69,17 @@ async function getPagesInDatabase(databaseID) {
     .query({
       database_id: databaseID,
     })
-    .catch((error) => {
+    .catch(async (error) => {
+      console.log(`HI: ${error.code}`)
       console.error(error);
-      return {};
+      if (error.code.includes("notionhq_client_request_timeout")) {
+        console.log("Notion timed out, waiting 10 secs then retrying");
+        await sleep(10000);
+        var result = getPagesInDatabase(databaseID);
+        return result;
+      } else {
+        return {};
+      }
     });
   databasePageList = [...databasePageList, ...currentDatabasePages.results];
   while (currentDatabasePages.has_more) {
@@ -93,15 +101,18 @@ async function getPagesInDatabase(databaseID) {
   return databasePageList;
 }
 
-async function perBlock(blockID, options={}) {
+async function perBlock(blockID, options = {}) {
   if (blockID == undefined) {
     console.trace(`blockID is somehow undefined. ???`);
   }
-  var currentBlockExtraProperties = {}
-  if ('databasePage' in options) {
-    currentBlockExtraProperties = options.databasePage
+  var currentBlockExtraProperties = {};
+  if ("databasePage" in options) {
+    currentBlockExtraProperties = options.databasePage;
   }
-  currentBlockExtraProperties = {...currentBlockExtraProperties, children: [] };
+  currentBlockExtraProperties = {
+    ...currentBlockExtraProperties,
+    children: [],
+  };
   //get block from notion
   while (checkIfOkayToSendRequest() == false) {
     // console.log('nup')
@@ -111,21 +122,37 @@ async function perBlock(blockID, options={}) {
   last_request_made = Date.now();
   var currentBlockNotionResponse = await notion.blocks
     .retrieve({ block_id: blockID })
-    .catch((error) => {
+    .catch(async (error) => {
+      console.log(`HI: ${error.code}`)
       console.error(error);
-      console.log(`Errored, so returning.`);
-      return {
-        ...currentBlockNotionResponse,
-        ...currentBlockExtraProperties,
-      };
+      if (error.code.includes("notionhq_client_request_timeout")) {
+        console.log("Notion timed out, waiting 10 secs then retrying");
+        await sleep(10000);
+        var result = perBlock(blockID, options);
+        return result;
+      } else {
+        console.log(`Errored, so returning.`);
+        return {
+          ...currentBlockNotionResponse,
+          ...currentBlockExtraProperties,
+        };
+      }
     });
   var currentBlockID = blockID;
   if (currentBlockNotionResponse.type == "child_database") {
     console.log(`hit db`);
     var databasePageResult = await getPagesInDatabase(blockID).catch(
-      (error) => {
+      async (error) => {
+        console.log(`HI: ${error.code}`)
         console.error(error);
-        return currentBlockNotionResponse;
+        if (error.code.includes("notionhq_client_request_timeout")) {
+          console.log("Notion timed out, waiting 10 secs then retrying");
+          await sleep(10000);
+          var result = perBlock(blockID, options);
+          return result;
+        } else {
+          return currentBlockNotionResponse;
+        }
       }
     );
     console.log(`Creating task queue`);
@@ -135,7 +162,11 @@ async function perBlock(blockID, options={}) {
       if (currentDatabasePage.id == undefined) {
         console.trace(`undefined database page id somehow. :/`);
       } else {
-        databasePageQueue.push(perBlock(currentDatabasePage.id, {databasePage: currentDatabasePage}));
+        databasePageQueue.push(
+          perBlock(currentDatabasePage.id, {
+            databasePage: currentDatabasePage,
+          })
+        );
       }
     }
     console.log(`Starting queue`);
@@ -174,9 +205,17 @@ async function perBlockChildrenRoutine(currentBlock, currentBlockID) {
   console.log(`Getting data from notion`);
   var currentBlockChildren = await notion.blocks.children
     .list({ block_id: currentBlockID, page_size: 100 })
-    .catch((error) => {
+    .catch(async (error) => {
+      console.log(`HI: ${error.code}`)
       console.error(error);
-      return currentBlock;
+      if (error.code.includes("notionhq_client_request_timeout")) {
+        console.log("Notion timed out, waiting 10 secs then retrying");
+        await sleep(10000);
+        var result = perBlockChildrenRoutine(currentBlock, currentBlockID);
+        return result;
+      } else {
+        return currentBlock;
+      }
     });
   childrenResultList = [...childrenResultList, ...currentBlockChildren.results];
   let tempPrintArray = [];
@@ -197,9 +236,17 @@ async function perBlockChildrenRoutine(currentBlock, currentBlockID) {
         page_size: 100,
         start_cursor: cursorToUse,
       })
-      .catch((error) => {
+      .catch(async (error) => {
+        console.log(`HI: ${error.code}`)
         console.error(error);
-        return currentBlock;
+        if (error.code.includes("notionhq_client_request_timeout")) {
+          console.log("Notion timed out, waiting 10 secs then retrying");
+          await sleep(10000);
+          var result = perBlockChildrenRoutine(currentBlock, currentBlockID);
+          return result;
+        } else {
+          return currentBlock;
+        }
       });
     childrenResultList = [
       ...childrenResultList,
