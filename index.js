@@ -27,6 +27,14 @@ function checkIfOkayToSendRequest() {
   return true;
 }
 
+function isIterable(obj) {
+  // checks for null and undefined
+  if (obj == null) {
+    return false;
+  }
+  return typeof obj[Symbol.iterator] === 'function';
+}
+
 async function startBackupProcess(rootPageIDToCheck) {
   console.log(`Starting backup`);
   await perPage(rootPageIDToCheck);
@@ -70,13 +78,18 @@ async function getPagesInDatabase(databaseID) {
       database_id: databaseID,
     })
     .catch(async (error) => {
-      console.log(`HI: ${error.code}`)
+      console.log(`HI: ${error.code}`);
       console.error(error);
-      if (error.code.includes("notionhq_client_request_timeout")) {
-        console.log("Notion timed out, waiting 10 secs then retrying");
-        await sleep(10000);
-        var result = getPagesInDatabase(databaseID);
-        return result;
+      if ("code" in error) {
+        if (
+          error.code.includes("notionhq_client_request_timeout") ||
+          error.code.includes("ECONNRESET")
+        ) {
+          console.log("Notion timed out, waiting 10 secs then retrying");
+          await sleep(10000);
+          var result = getPagesInDatabase(databaseID);
+          return result;
+        }
       } else {
         return {};
       }
@@ -123,13 +136,18 @@ async function perBlock(blockID, options = {}) {
   var currentBlockNotionResponse = await notion.blocks
     .retrieve({ block_id: blockID })
     .catch(async (error) => {
-      console.log(`HI: ${error.code}`)
+      console.log(`HI: ${error.code}`);
       console.error(error);
-      if (error.code.includes("notionhq_client_request_timeout")) {
-        console.log("Notion timed out, waiting 10 secs then retrying");
-        await sleep(10000);
-        var result = perBlock(blockID, options);
-        return result;
+      if ("code" in error) {
+        if (
+          error.code.includes("notionhq_client_request_timeout") ||
+          error.code.includes("ECONNRESET")
+        ) {
+          console.log("Notion timed out, waiting 10 secs then retrying");
+          await sleep(10000);
+          var result = perBlock(blockID, options);
+          return result;
+        }
       } else {
         console.log(`Errored, so returning.`);
         return {
@@ -143,13 +161,18 @@ async function perBlock(blockID, options = {}) {
     console.log(`hit db`);
     var databasePageResult = await getPagesInDatabase(blockID).catch(
       async (error) => {
-        console.log(`HI: ${error.code}`)
+        console.log(`HI: ${error.code}`);
         console.error(error);
-        if (error.code.includes("notionhq_client_request_timeout")) {
-          console.log("Notion timed out, waiting 10 secs then retrying");
-          await sleep(10000);
-          var result = perBlock(blockID, options);
-          return result;
+        if ("code" in error) {
+          if (
+            error.code.includes("notionhq_client_request_timeout") ||
+            error.code.includes("ECONNRESET")
+          ) {
+            console.log("Notion timed out, waiting 10 secs then retrying");
+            await sleep(10000);
+            var result = perBlock(blockID, options);
+            return result;
+          }
         } else {
           return currentBlockNotionResponse;
         }
@@ -206,18 +229,25 @@ async function perBlockChildrenRoutine(currentBlock, currentBlockID) {
   var currentBlockChildren = await notion.blocks.children
     .list({ block_id: currentBlockID, page_size: 100 })
     .catch(async (error) => {
-      console.log(`HI: ${error.code}`)
+      console.log(`HI: ${error.code}`);
       console.error(error);
-      if (error.code.includes("notionhq_client_request_timeout")) {
-        console.log("Notion timed out, waiting 10 secs then retrying");
-        await sleep(10000);
-        var result = perBlockChildrenRoutine(currentBlock, currentBlockID);
-        return result;
+      if ("code" in error) {
+        if (
+          error.code.includes("notionhq_client_request_timeout") ||
+          error.code.includes("ECONNRESET")
+        ) {
+          console.log("Notion timed out, waiting 10 secs then retrying");
+          await sleep(10000);
+          var result = perBlockChildrenRoutine(currentBlock, currentBlockID);
+          return result;
+        }
       } else {
         return currentBlock;
       }
     });
+  if (isIterable(currentBlockChildren.results)) {
   childrenResultList = [...childrenResultList, ...currentBlockChildren.results];
+  }
   let tempPrintArray = [];
   for (var i = 0; i < childrenResultList.length; i++) {
     tempPrintArray.push(childrenResultList[i].id);
@@ -237,13 +267,18 @@ async function perBlockChildrenRoutine(currentBlock, currentBlockID) {
         start_cursor: cursorToUse,
       })
       .catch(async (error) => {
-        console.log(`HI: ${error.code}`)
+        console.log(`HI: ${error.code}`);
         console.error(error);
-        if (error.code.includes("notionhq_client_request_timeout")) {
-          console.log("Notion timed out, waiting 10 secs then retrying");
-          await sleep(10000);
-          var result = perBlockChildrenRoutine(currentBlock, currentBlockID);
-          return result;
+        if ("code" in error) {
+          if (
+            error.code.includes("notionhq_client_request_timeout") ||
+            error.code.includes("ECONNRESET")
+          ) {
+            console.log("Notion timed out, waiting 10 secs then retrying");
+            await sleep(10000);
+            var result = perBlockChildrenRoutine(currentBlock, currentBlockID);
+            return result;
+          }
         } else {
           return currentBlock;
         }
