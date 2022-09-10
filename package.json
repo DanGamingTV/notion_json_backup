@@ -1,0 +1,15 @@
+{
+  "name": "notion_json_backup",
+  "version": "1.0.0",
+  "description": "Exports a notion workspace into JSON files",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@notionhq/client": "^2.2.0",
+    "dotenv": "^16.0.2"
+  }
+}
