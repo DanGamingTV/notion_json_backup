@@ -1,8 +1,8 @@
 require("dotenv").config();
 const fs = require("fs/promises");
 const { Client } = require("@notionhq/client");
-const maxRequestsPerSecond = 2.5
-const timeToWaitPerRequest = (1/maxRequestsPerSecond)*1000
+const maxRequestsPerSecond = 2.5;
+const timeToWaitPerRequest = (1 / maxRequestsPerSecond) * 1000;
 
 // Initializing a client
 console.log(`Initializing Notion client.`);
@@ -13,7 +13,9 @@ const notion = new Client({
 var last_request_made = Date.now();
 
 function sleep(ms, fromFunc) {
-  console.log(`Sleeping for ${ms/1000} second${ms>1000 ? "s" : ""} - from ${fromFunc}`)
+  console.log(
+    `Sleeping for ${ms / 1000} second${ms > 1000 ? "s" : ""} - from ${fromFunc}`
+  );
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -42,6 +44,9 @@ async function perPage(pageID) {
   // page_id: pageID,
   // });
   // console.log(currentPageNotionResponse);
+  if (pageID == undefined) {
+    console.trace(`undefined page id somehow`);
+  }
   var blockResponse = await perBlock(pageID);
   console.log("assuming that all data is now gathered");
   // console.log(JSON.stringify(blockResponse));
@@ -71,7 +76,9 @@ async function getPagesInDatabase(databaseID) {
   databasePageList = [...databasePageList, ...currentDatabasePages.results];
   while (currentDatabasePages.has_more) {
     var cursorToUse = currentDatabasePages.next_cursor;
-    console.log(`Database has more than 100 entries. Getting the next 100. Using cursor ${cursorToUse}`)
+    console.log(
+      `Database has more than 100 entries. Getting the next 100. Using cursor ${cursorToUse}`
+    );
     while (checkIfOkayToSendRequest() == false) {
       // console.log('nup')
       // await sleep(timeToWaitPerRequest, 'perBlock 90');
@@ -86,8 +93,15 @@ async function getPagesInDatabase(databaseID) {
   return databasePageList;
 }
 
-async function perBlock(blockID) {
-  var currentBlockExtraProperties = { children: [] };
+async function perBlock(blockID, options={}) {
+  if (blockID == undefined) {
+    console.trace(`blockID is somehow undefined. ???`);
+  }
+  var currentBlockExtraProperties = {}
+  if ('databasePage' in options) {
+    currentBlockExtraProperties = options.databasePage
+  }
+  currentBlockExtraProperties = {...currentBlockExtraProperties, children: [] };
   //get block from notion
   while (checkIfOkayToSendRequest() == false) {
     // console.log('nup')
@@ -107,14 +121,22 @@ async function perBlock(blockID) {
     });
   var currentBlockID = blockID;
   if (currentBlockNotionResponse.type == "child_database") {
-    console.log(`hit db`)
-    var databasePageResult = await getPagesInDatabase(blockID);
+    console.log(`hit db`);
+    var databasePageResult = await getPagesInDatabase(blockID).catch(
+      (error) => {
+        console.error(error);
+        return currentBlockNotionResponse;
+      }
+    );
     console.log(`Creating task queue`);
     var databasePageQueue = [];
     for (var i = 0; i < databasePageResult.length; i++) {
       var currentDatabasePage = databasePageResult[i];
-
-      databasePageQueue.push(perBlock(currentDatabasePage.id));
+      if (currentDatabasePage.id == undefined) {
+        console.trace(`undefined database page id somehow. :/`);
+      } else {
+        databasePageQueue.push(perBlock(currentDatabasePage.id, {databasePage: currentDatabasePage}));
+      }
     }
     console.log(`Starting queue`);
     return Promise.all(databasePageQueue).then((resultingData) => {
@@ -170,7 +192,11 @@ async function perBlockChildrenRoutine(currentBlock, currentBlockID) {
     }
     last_request_made = Date.now();
     var currentBlockChildren = await notion.blocks.children
-      .list({ block_id: currentBlockID, page_size: 100, start_cursor: cursorToUse })
+      .list({
+        block_id: currentBlockID,
+        page_size: 100,
+        start_cursor: cursorToUse,
+      })
       .catch((error) => {
         console.error(error);
         return currentBlock;
@@ -186,7 +212,13 @@ async function perBlockChildrenRoutine(currentBlock, currentBlockID) {
   console.log(`Creating task queue`);
   for (var i = 0; i < childrenResultList.length; i++) {
     var currentChildBlock = childrenResultList[i];
-    if (currentChildBlock.has_children || currentChildBlock.type == "child_database") {
+    if (
+      currentChildBlock.has_children ||
+      currentChildBlock.type == "child_database"
+    ) {
+      if (currentChildBlock.id == undefined) {
+        console.trace(`undefined child block id here line 195`);
+      }
       childDataGetQueue.push(perBlock(currentChildBlock.id));
     } else {
       listOfChildrenToReturn.push(currentChildBlock);
